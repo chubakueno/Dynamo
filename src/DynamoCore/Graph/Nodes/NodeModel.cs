@@ -339,6 +339,24 @@ namespace Dynamo.Graph.Nodes
                 return !IsCustomFunction;
             }
         }
+        /// <summary>
+        /// This property will make the node view is hidden in the canvas
+        /// Current use case is when trying to measure a node before it appears
+        /// IsVisible has a different use case
+        /// </summary>
+        private bool isNodeViewHidden;
+        [JsonIgnore]
+        public bool IsNodeViewHidden {
+            get
+            {
+                return isNodeViewHidden;
+            }
+            set
+            {
+                isNodeViewHidden = value;
+                RaisePropertyChanged("IsNodeViewHidden");
+            }
+        }
 
         /// <summary>
         /// This property is user-controllable via a checkbox and is set to true when a user wishes to include

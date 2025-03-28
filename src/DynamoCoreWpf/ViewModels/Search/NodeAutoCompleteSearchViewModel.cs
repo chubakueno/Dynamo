@@ -32,6 +32,7 @@ using ProtoCore.Mirror;
 using ProtoCore.Utils;
 using RestSharp;
 using Dynamo.Graph.Workspaces;
+using Dynamo.Graph;
 
 namespace Dynamo.ViewModels
 {
@@ -763,7 +764,7 @@ namespace Dynamo.ViewModels
             var node = PortViewModel.NodeViewModel;
             var wsViewModel = node.WorkspaceViewModel;
 
-            DeleteTransientNodes();
+            var oldTransientNodesSet = wsViewModel.Nodes.Where(x=>x.IsTransient).Select(x=>x.Id).ToList();
 
             var index = 0;
             // A map of the cluster result v.s. actual nodes created for node connection look up
@@ -785,21 +786,55 @@ namespace Dynamo.ViewModels
                 }
                 index++;
             });
-
-            ClusterResultItem.Topology.Connections.ToList().ForEach(connection =>
+            // AutoLayout should be called after all nodes are connected
+            var newTransientNodes = wsViewModel.Model.Nodes.Where(x => x.IsTransient && !oldTransientNodesSet.Contains(x.GUID)).ToList();
+            foreach (var curNode in newTransientNodes)
             {
-                // Connect the nodes
-                var sourceNode = clusterMapping[connection.StartNode.NodeId];
-                var targetNode = clusterMapping[connection.EndNode.NodeId];
-                // The port index is 1- based (currently a hack and not expected from service)
-                var sourcePort = sourceNode.OutPorts.FirstOrDefault(p => p.PortModel.Index == connection.StartNode.PortIndex - 1);
-                var targetPort = targetNode.InPorts.FirstOrDefault(p => p.PortModel.Index == connection.EndNode.PortIndex - 1);
-                var commands = new List<DynamoModel.ModelBasedRecordableCommand>
+                curNode.IsNodeViewHidden = true;
+            }
+
+            Dispatcher.CurrentDispatcher.BeginInvoke(() =>
+            {
+                if (oldTransientNodesSet.Any())
+                {
+                    dynamoViewModel.Model.ExecuteCommand(new DynamoModel.DeleteModelCommand(oldTransientNodesSet));
+                }
+
+                foreach (var curNode in newTransientNodes)
+                {
+                    curNode.IsNodeViewHidden = false;
+                }
+
+                ClusterResultItem.Topology.Connections.ToList().ForEach(connection =>
+                {
+                    // Connect the nodes
+                    var sourceNode = clusterMapping[connection.StartNode.NodeId];
+                    var targetNode = clusterMapping[connection.EndNode.NodeId];
+                    // The port index is 1- based (currently a hack and not expected from service)
+                    var sourcePort = sourceNode.OutPorts.FirstOrDefault(p => p.PortModel.Index == connection.StartNode.PortIndex - 1);
+                    var targetPort = targetNode.InPorts.FirstOrDefault(p => p.PortModel.Index == connection.EndNode.PortIndex - 1);
+                    var commands = new List<DynamoModel.ModelBasedRecordableCommand>
                     {
                         new DynamoModel.MakeConnectionCommand(sourceNode.Id.ToString(), connection.StartNode.PortIndex - 1, PortType.Output, DynamoModel.MakeConnectionCommand.Mode.Begin),
                         new DynamoModel.MakeConnectionCommand(targetNode.Id.ToString(), connection.EndNode.PortIndex - 1, PortType.Input, DynamoModel.MakeConnectionCommand.Mode.End),
                     };
-                commands.ForEach(c =>
+                    commands.ForEach(c =>
+                    {
+                        try
+                        {
+                            wsViewModel.DynamoViewModel.Model.ExecuteCommand(c);
+                        }
+                        catch (Exception) { }
+                    });
+                });
+
+                // Connect the cluster to the original node and port
+                var finalCommands = new List<DynamoModel.ModelBasedRecordableCommand>
+                {
+                    new DynamoModel.MakeConnectionCommand(node.Id.ToString(), 0, PortType.Output, DynamoModel.MakeConnectionCommand.Mode.Begin),
+                    new DynamoModel.MakeConnectionCommand(targetNodeFromCluster?.Id.ToString(), ClusterResultItem.EntryNodeInPort, PortType.Input, DynamoModel.MakeConnectionCommand.Mode.End),
+                };
+                finalCommands.ForEach(c =>
                 {
                     try
                     {
@@ -807,29 +842,15 @@ namespace Dynamo.ViewModels
                     }
                     catch (Exception) { }
                 });
-            });
 
-            // Connect the cluster to the original node and port
-            var finalCommands = new List<DynamoModel.ModelBasedRecordableCommand>
+                // AutoLayout should be called after all nodes are connected
+                foreach (var clusterNode in clusterMapping.Values)
                 {
-                    new DynamoModel.MakeConnectionCommand(node.Id.ToString(), 0, PortType.Output, DynamoModel.MakeConnectionCommand.Mode.Begin),
-                    new DynamoModel.MakeConnectionCommand(targetNodeFromCluster?.Id.ToString(), ClusterResultItem.EntryNodeInPort, PortType.Input, DynamoModel.MakeConnectionCommand.Mode.End),
-                };
-            finalCommands.ForEach(c =>
-            {
-                try
-                {
-                    wsViewModel.DynamoViewModel.Model.ExecuteCommand(c);
+                    wsViewModel.DynamoViewModel.Model.AddToSelection(clusterNode.NodeModel);
                 }
-                catch (Exception) { }
-            });
 
-            // AutoLayout should be called after all nodes are connected
-            foreach (var clusterNode in clusterMapping.Values)
-            {
-                wsViewModel.DynamoViewModel.Model.AddToSelection(clusterNode.NodeModel);
-            }
-            wsViewModel.Model.DoGraphAutoLayout(false, true, node.Id);
+                wsViewModel.Model.DoGraphAutoLayout(false, true, node.Id);
+            }, DispatcherPriority.Render);
         }
         /// <summary>
         /// Key function to populate node autocomplete results to display

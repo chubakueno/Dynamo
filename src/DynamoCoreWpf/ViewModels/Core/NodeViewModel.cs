@@ -780,6 +780,12 @@ namespace Dynamo.ViewModels
             }
         }
 
+
+        public bool IsNodeViewHidden
+        {
+            get => NodeModel.IsNodeViewHidden;
+        }
+
         /// <summary>
         /// Used as a flag to indicate to associated connectors what ZIndex to be drawn at.
         /// </summary>
@@ -1184,6 +1190,9 @@ namespace Dynamo.ViewModels
             {
                 case "Name":
                     RaisePropertyChanged("Name");
+                    break;
+                case "IsNodeViewHidden":
+                    RaisePropertyChanged("IsNodeViewHidden");
                     break;
                 case "X":
                     RaisePropertyChanged("Left");
