@@ -16,11 +16,13 @@ using Dynamo.Utilities;
 using Dynamo.ViewModels;
 using Dynamo.Wpf.Views;
 using Dynamo.Wpf.Windows;
+using Greg.Responses;
 using ICSharpCode.AvalonEdit;
 using ICSharpCode.AvalonEdit.CodeCompletion;
 using ICSharpCode.AvalonEdit.Folding;
 using ICSharpCode.AvalonEdit.Highlighting;
 using ICSharpCode.AvalonEdit.Highlighting.Xshd;
+using OpenAI.Chat;
 using PythonNodeModels;
 
 namespace PythonNodeModelsWpf
@@ -488,6 +490,47 @@ namespace PythonNodeModelsWpf
             if (NodeModel == null)
                 throw new NullReferenceException(nameof(NodeModel));
 
+            if (editText.Document != null && !String.IsNullOrEmpty(editText.Document.Text))
+            {
+                var convertedText = PythonIndentationStrategy.ConvertTabsToSpaces(editText.Document.Text);
+                editText.Document.Text = convertedText;
+            }
+        }
+
+        private string GenerateCode()
+        {
+            var userPrompt = PromptBox.Text;
+            ChatClient client = new(model: "gpt-4o", apiKey: Environment.GetEnvironmentVariable("OPENAI_API_KEY"));
+
+            ChatCompletion completion = client.CompleteChat(
+                new SystemChatMessage(@"
+You are an assistant that writes only Python code for Python Script nodes in Dynamo BIM.
+
+Your output must be valid Python that uses the Autodesk.DesignScript.Geometry namespace via ProtoGeometry, and you must not include explanations, comments, or markdown formatting — only the Python code itself.
+
+Assume inputs come through the `IN` list and the result is assigned to `OUT`.
+
+Avoid external dependencies. Use only what is available in standard Dynamo geometry and math libraries.
+"),
+                new UserChatMessage(userPrompt));
+
+            var response = completion.Content[0].Text.Trim();
+            const string startFence = "```python";
+            const string endFence = "```";
+            if (response.StartsWith(startFence) && response.EndsWith(endFence)) ;
+            {
+                response = response[startFence.Length..^endFence.Length];
+            }
+            return response;
+        }
+        private void OnAIGeneration(object sender, RoutedEventArgs e)
+        {
+            if (NodeModel == null)
+                throw new NullReferenceException(nameof(NodeModel));
+            if (editText.Document != null)
+            {
+                editText.Document.Text = GenerateCode();
+            }
             if (editText.Document != null && !String.IsNullOrEmpty(editText.Document.Text))
             {
                 var convertedText = PythonIndentationStrategy.ConvertTabsToSpaces(editText.Document.Text);

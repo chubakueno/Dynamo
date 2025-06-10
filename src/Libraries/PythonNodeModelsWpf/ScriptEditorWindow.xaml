@@ -141,6 +141,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="auto" />
                     <RowDefinition Height="60" />
+                    <RowDefinition Height="auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="auto" />
                     <RowDefinition Height="auto" />
@@ -343,14 +344,34 @@
                                    Source="/PythonNodeModelsWpf;component/Resources/question-filled_hover.png" />
                         </Button.Resources>
                     </Button>
+                    <Button Style="{StaticResource IconButton}"
+                            Name="AIGeneration"
+                            Click="OnAIGeneration">
+                        <Button.ToolTip>
+                            <ToolTip Content="{x:Static p:Resources.PythonScriptEditorMoreInfoButtonTooltip}" Style="{StaticResource GenericToolTipLight}"/>
+                        </Button.ToolTip>
+                        <Button.Resources>
+                            <Image x:Key="Shape"
+                                   Source="/PythonNodeModelsWpf;component/Resources/question-filled.png" />
+                            <Image x:Key="HighlightShape"
+                                   Source="/PythonNodeModelsWpf;component/Resources/question-filled_hover.png" />
+                        </Button.Resources>
+                    </Button>
                 </StackPanel>
+                <Border Margin="0,0,0,0"
+                        Padding="20 0 20 10"
+                        BorderThickness="0"
+                        Background="{StaticResource PreferencesWindowBackgroundColor}"
+                        Grid.Row="2">
+                    <TextBox Name="PromptBox"/>
+                </Border>
 
                 <!-- Avalon Editor --> 
                 <Border Margin="0,0,0,0"
                         Padding="20 0 20 10"
                         BorderThickness="0"
                         Background="{StaticResource PreferencesWindowBackgroundColor}"
-                        Grid.Row="2">
+                        Grid.Row="3">
                     <avalonedit:TextEditor Name="editText"
                                            IsEnabled="True"
                                            FontFamily="{StaticResource SourceCodePro}"
@@ -370,7 +391,7 @@
                             HorizontalAlignment="Right"
                             Height="60"
                             Visibility="Visible"
-                            Grid.Row="3">
+                            Grid.Row="4">
 
                     <Button Content="{x:Static p:Resources.PythonScriptEditorRunButton}"
                             Margin="11 0 20 15"
@@ -398,7 +419,7 @@
 
                 <!-- The Warning Bar - activates on Esc if unsaved changes -->
                 <Grid Name="UnsavedChangesStatusBar"
-                        Grid.Row="4"
+                        Grid.Row="5"
                         Margin="0 -20 0 5"
                         Height="95"
                         Background="#EFD5C1"
