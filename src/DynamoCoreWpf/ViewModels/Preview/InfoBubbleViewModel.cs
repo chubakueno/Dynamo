@@ -26,7 +26,7 @@ namespace Dynamo.ViewModels
 
     public delegate void InfoBubbleEventHandler(object sender, InfoBubbleEventArgs e);
 
-    public partial class InfoBubbleViewModel : ViewModelBase
+    public partial class    InfoBubbleViewModel : ViewModelBase
     {
         public enum Style
         {

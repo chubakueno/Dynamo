@@ -44,7 +44,7 @@
   <ItemGroup>
 	<PackageReference Include="FontAwesome5" Version="2.1.11" />
 	<PackageReference Include="AvalonEdit" Version="6.3.0.90" />
-	<PackageReference Include="OpenAI" Version="2.1.0" />
+	<PackageReference Include="OpenAI" Version="2.2.0-beta.4" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\DynamoCoreWpf\DynamoCoreWpf.csproj">

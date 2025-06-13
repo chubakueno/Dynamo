@@ -422,7 +422,7 @@ namespace Dynamo.Graph.Nodes
         /// <summary>
         /// Collection of warnings, errors and info items applied to the NodeModel.
         /// </summary>
-        internal ObservableHashSet<Info> Infos
+        internal ObservableHashSet  <Info> Infos
         {
             get { return infos; }
         }

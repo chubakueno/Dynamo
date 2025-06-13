@@ -7,7 +7,7 @@
                          xmlns:avalonedit="clr-namespace:ICSharpCode.AvalonEdit;assembly=ICSharpCode.AvalonEdit"
                          xmlns:p="clr-namespace:PythonNodeModels.Properties;assembly=PythonNodeModels"
                          xmlns:pw="clr-namespace:PythonNodeModelsWpf"
-                         xmlns:sys="clr-namespace:System;assembly=mscorlib"
+                         xmlns:sys="clr-namespace:System;assembly=mscorlib" xmlns:local="clr-namespace:Dynamo.PackageManager.UI;assembly=DynamoCoreWpf" xmlns:dynconverters="clr-namespace:Dynamo.Controls;assembly=DynamoCoreWpf"
                          Title="{Binding NodeModel.Name, Mode=OneWay, RelativeSource={RelativeSource Self}}"
                          Height="560"
                          Width="600"
@@ -24,6 +24,7 @@
             <ResourceDictionary.MergedDictionaries>
                 <ui1:SharedResourceDictionary Source="{x:Static ui1:SharedDictionaryManager.DynamoModernDictionaryUri}" />
             </ResourceDictionary.MergedDictionaries>
+            <dynconverters:InverseBoolToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter" />
             <Style x:Key="IconButton"
                    TargetType="{x:Type Button}"
                    BasedOn="{StaticResource ResourceKey=SButtonWithShapeIcon}">
@@ -384,7 +385,14 @@
                                            PreviewMouseWheel="EditorBox_PreviewMouseWheel"
                                            PreviewKeyDown="EditText_OnPreviewKeyDown"/>
                 </Border>
- 
+                <local:LoadingAnimationStripeControl
+                        Visibility="Collapsed"
+                        Name="LoadingSpinner"
+                        Grid.Row="3"
+                        AnimationSpeed="5"
+                        Margin="8,8,0,8"
+                    />
+
                 <!-- Run and Close Button -->
                 <StackPanel x:Name="SaveButtonBar"
                             Orientation="Horizontal"

@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace Dynamo.Utilities
 {
-    internal class ObservableHashSet<T> : INotifyCollectionChanged
+    public class ObservableHashSet<T> : INotifyCollectionChanged
     {
         private readonly HashSet<T> set = new HashSet<T>();
 
@@ -16,24 +16,24 @@ namespace Dynamo.Utilities
         /// </summary>
         public event NotifyCollectionChangedEventHandler CollectionChanged;
 
-        public void Add(T item)
+        internal void Add(T item)
         {
             set.Add(item);
             CollectionChanged?.Invoke(this, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, item));
         }
 
-        public void RemoveWhere(Predicate<T> match)
+        internal void RemoveWhere(Predicate<T> match)
         {
             set.RemoveWhere(match);
             CollectionChanged?.Invoke(this, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
         }
 
-        public bool Any(Func<T, bool> match)
+        internal bool Any(Func<T, bool> match)
         {
             return set.Any(match);
         }
 
-        public void AddRange(IEnumerable<T> range)
+        internal void AddRange(IEnumerable<T> range)
         {
             foreach (var item in range)
             {
@@ -42,7 +42,7 @@ namespace Dynamo.Utilities
             CollectionChanged?.Invoke(this, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, range));
         }
 
-        public int Count
+        internal int Count
         {
             get { return set.Count; }
         }

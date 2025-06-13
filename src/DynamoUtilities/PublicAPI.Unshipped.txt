@@ -40,6 +40,10 @@ Dynamo.Utilities.ModifierKeys.Control = 2 -> Dynamo.Utilities.ModifierKeys
 Dynamo.Utilities.ModifierKeys.None = 0 -> Dynamo.Utilities.ModifierKeys
 Dynamo.Utilities.ModifierKeys.Shift = 4 -> Dynamo.Utilities.ModifierKeys
 Dynamo.Utilities.ModifierKeys.Windows = 8 -> Dynamo.Utilities.ModifierKeys
+Dynamo.Utilities.ObservableHashSet<T>
+Dynamo.Utilities.ObservableHashSet<T>.CollectionChanged -> System.Collections.Specialized.NotifyCollectionChangedEventHandler
+Dynamo.Utilities.ObservableHashSet<T>.GetEnumerator() -> System.Collections.Generic.IEnumerator<T>
+Dynamo.Utilities.ObservableHashSet<T>.ObservableHashSet() -> void
 Dynamo.Utilities.Option
 Dynamo.Utilities.OrderedSet<T>
 Dynamo.Utilities.OrderedSet<T>.Add(T item) -> bool

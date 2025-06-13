@@ -1,7 +1,10 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -23,6 +26,7 @@ using ICSharpCode.AvalonEdit.Folding;
 using ICSharpCode.AvalonEdit.Highlighting;
 using ICSharpCode.AvalonEdit.Highlighting.Xshd;
 using OpenAI.Chat;
+using OpenAI.Responses;
 using PythonNodeModels;
 
 namespace PythonNodeModelsWpf
@@ -109,6 +113,7 @@ namespace PythonNodeModelsWpf
 
             EngineSelectorComboBox.Visibility = Visibility.Visible;
             NodeModel.UserScriptWarned += WarnUserScript;
+            NodeModel.Infos.CollectionChanged += Infos_CollectionChanged;
 
             Analytics.TrackScreenView("Python");
         }
@@ -497,45 +502,118 @@ namespace PythonNodeModelsWpf
             }
         }
 
-        private string GenerateCode()
+        private List<string> ConversationIds = [];
+
+        private string GenerateCode(string userPrompt, string previousResponseId = null)
         {
-            var userPrompt = PromptBox.Text;
-            ChatClient client = new(model: "gpt-4o", apiKey: Environment.GetEnvironmentVariable("OPENAI_API_KEY"));
-
-            ChatCompletion completion = client.CompleteChat(
-                new SystemChatMessage(@"
+            OpenAIResponseClient client = new(model: "gpt-4o", apiKey: Environment.GetEnvironmentVariable("OPENAI_API_KEY"));
+            ResponseTool fileSearchTool = ResponseTool.CreateFileSearchTool(vectorStoreIds: ["vs_6848efcf02008191b6816cbe9572dbb5"]);
+            var completion = client.CreateResponse(
+                userInputText: userPrompt,
+                options: new ResponseCreationOptions
+                {
+                    Instructions = @"
 You are an assistant that writes only Python code for Python Script nodes in Dynamo BIM.
-
 Your output must be valid Python that uses the Autodesk.DesignScript.Geometry namespace via ProtoGeometry, and you must not include explanations, comments, or markdown formatting — only the Python code itself.
-
 Assume inputs come through the `IN` list and the result is assigned to `OUT`.
-
+For each IN, verify that the value exists (IN has enough elements) and is non-null, else assign a suitable default value.
+Always explicitly import Autodesk.DesignScript.Geometry.
 Avoid external dependencies. Use only what is available in standard Dynamo geometry and math libraries.
-"),
-                new UserChatMessage(userPrompt));
+",
+                    Tools = { fileSearchTool },
+                    PreviousResponseId = previousResponseId
+                });
 
-            var response = completion.Content[0].Text.Trim();
-            const string startFence = "```python";
-            const string endFence = "```";
-            if (response.StartsWith(startFence) && response.EndsWith(endFence)) ;
+            foreach (ResponseItem outputItem in completion.Value.OutputItems)
             {
-                response = response[startFence.Length..^endFence.Length];
+                if (outputItem is FileSearchCallResponseItem fileSearchCall)
+                {
+                    Console.WriteLine($"[file_search] ({fileSearchCall.Status}): {fileSearchCall.Id}");
+                    foreach (string query in fileSearchCall.Queries)
+                    {
+                        Console.WriteLine($"  - {query}");
+                    }
+                }
+                else if (outputItem is MessageResponseItem message)
+                {
+                    var response = message.Content.FirstOrDefault()?.Text;
+                    const string startFence = "```python";
+                    const string endFence = "```";
+                    if (response.StartsWith(startFence) && response.EndsWith(endFence))
+                    {
+                        response = response[startFence.Length..^endFence.Length].Trim(' ', '\n', '\r');
+                    }
+
+                    Console.WriteLine($"[{message.Role}] {response}");
+
+                    ConversationIds.Add(completion.Value.Id);
+                    return response;
+                }
             }
-            return response;
+            return string.Empty;
+        }
+        private void Infos_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.NewItems == null || ConversationIds.Count == 0 || ConversationIds.Count > 1)
+            {
+                return;
+            }
+
+            List<string> errorMessages = [];
+            foreach (var info in NodeModel.Infos)
+            {
+                errorMessages.Add(info.Message);
+            }
+            if (!errorMessages.Any()) return;
+
+            dynamoViewModel.UIDispatcher.BeginInvoke(() =>
+            {
+                var prompt = string.Join("\n", errorMessages);
+                var conversationId = ConversationIds.Last();
+                LoadingSpinner.Visibility = Visibility.Visible;
+                Task.Run(() =>
+                {
+                    var code = GenerateCode(prompt, conversationId);
+                    dynamoViewModel.UIDispatcher.BeginInvoke(() =>
+                    {
+                        LoadingSpinner.Visibility = Visibility.Collapsed;
+                        editText.Document.Text = code;
+
+                        NodeModel.EngineName = CachedEngine;
+                        UpdateScript(editText.Text);
+                        if (dynamoViewModel.HomeSpace.RunSettings.RunType != RunType.Automatic)
+                        {
+                            dynamoViewModel.HomeSpace.Run();
+                        }
+                    });
+                });
+            });
         }
         private void OnAIGeneration(object sender, RoutedEventArgs e)
         {
+            ConversationIds.Clear();
             if (NodeModel == null)
                 throw new NullReferenceException(nameof(NodeModel));
-            if (editText.Document != null)
+            if (editText.Document == null) return;
+
+            LoadingSpinner.Visibility = Visibility.Visible;
+            var prompt = PromptBox.Text;
+            Task.Run(() =>
             {
-                editText.Document.Text = GenerateCode();
-            }
-            if (editText.Document != null && !String.IsNullOrEmpty(editText.Document.Text))
-            {
-                var convertedText = PythonIndentationStrategy.ConvertTabsToSpaces(editText.Document.Text);
-                editText.Document.Text = convertedText;
-            }
+                var code = GenerateCode(prompt);
+                dynamoViewModel.UIDispatcher.BeginInvoke(() =>
+                {
+                    LoadingSpinner.Visibility = Visibility.Collapsed;
+                    editText.Document.Text = code;
+
+                    NodeModel.EngineName = CachedEngine;
+                    UpdateScript(editText.Text);
+                    if (dynamoViewModel.HomeSpace.RunSettings.RunType != RunType.Automatic)
+                    {
+                        dynamoViewModel.HomeSpace.Run();
+                    }
+                });
+            });
         }
 
         private void OnMoreInfoClicked(object sender, RoutedEventArgs e)
@@ -574,6 +652,7 @@ Avoid external dependencies. Use only what is available in standard Dynamo geome
                 completionProvider?.Dispose();
                 NodeModel.CodeMigrated -= OnNodeModelCodeMigrated;
                 NodeModel.UserScriptWarned -= WarnUserScript;
+                NodeModel.Infos.CollectionChanged -= Infos_CollectionChanged;
                 this.Closed -= OnScriptEditorWindowClosed;
                 PythonEngineManager.Instance.AvailableEngines.CollectionChanged -= UpdateAvailableEngines;
 
