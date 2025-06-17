@@ -507,7 +507,7 @@ namespace PythonNodeModelsWpf
         private string GenerateCode(string userPrompt, string previousResponseId = null)
         {
             OpenAIResponseClient client = new(model: "gpt-4o", apiKey: Environment.GetEnvironmentVariable("OPENAI_API_KEY"));
-            ResponseTool fileSearchTool = ResponseTool.CreateFileSearchTool(vectorStoreIds: ["vs_6848efcf02008191b6816cbe9572dbb5"]);
+            ResponseTool fileSearchTool = ResponseTool.CreateFileSearchTool(vectorStoreIds: ["vs_68512c9588808191b262b4d5eea1e4be"]);
             var completion = client.CreateResponse(
                 userInputText: userPrompt,
                 options: new ResponseCreationOptions
@@ -518,6 +518,7 @@ Your output must be valid Python that uses the Autodesk.DesignScript.Geometry na
 Assume inputs come through the `IN` list and the result is assigned to `OUT`.
 For each IN, verify that the value exists (IN has enough elements) and is non-null, else assign a suitable default value.
 Always explicitly import Autodesk.DesignScript.Geometry.
+Do NOT use named use named parameters when using Autodesk.DesignScript.Geometry.
 Avoid external dependencies. Use only what is available in standard Dynamo geometry and math libraries.
 ",
                     Tools = { fileSearchTool },
