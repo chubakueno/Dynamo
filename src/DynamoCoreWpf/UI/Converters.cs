@@ -1974,6 +1974,7 @@ namespace Dynamo.Controls
 
             if (number <= Configurations.ZoomThreshold)
                 return Visibility.Collapsed;
+                
             return Visibility.Visible;
         }
 
