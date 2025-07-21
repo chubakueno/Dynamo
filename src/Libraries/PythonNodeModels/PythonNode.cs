@@ -11,8 +11,12 @@ using Autodesk.DesignScript.Runtime;
 using Dynamo.Configuration;
 using Dynamo.Graph;
 using Dynamo.Graph.Nodes;
+using Dynamo.Graph.Nodes.ZeroTouch;
 using Dynamo.Models;
 using Dynamo.PythonServices;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using ProtoCore.AST.AssociativeAST;
@@ -75,7 +79,6 @@ namespace PythonNodeModels
             {
                 NameOfAssemblyReferencedByNode = pyEng.GetType().Assembly.GetName();
             }
-
             return NameOfAssemblyReferencedByNode;
         }
 
@@ -146,6 +149,7 @@ namespace PythonNodeModels
                     "Evaluate",
                     new List<AssociativeNode>
                     {
+                        AstFactory.BuildStringNode(GUID.ToString()),
                         AstFactory.BuildStringNode(EngineName),
                         codeInputNode,
                         AstFactory.BuildExprList(names),
@@ -175,7 +179,7 @@ namespace PythonNodeModels
 
     }
 
-    [NodeName("Python Script")]
+    [NodeName("C# Script")]
     [NodeCategory(BuiltinNodeCategories.CORE_SCRIPTING)]
     [NodeDescription("PythonScriptDescription", typeof(Properties.Resources))]
     [NodeSearchTags("PythonSearchTags", typeof(Properties.Resources))]
@@ -204,16 +208,10 @@ namespace PythonNodeModels
         {
             get
             {
-                return "# " + Properties.Resources.PythonScriptEditorImports + Environment.NewLine +
-                        "import sys" + Environment.NewLine +
-                        "import clr" + Environment.NewLine +
-                        "clr.AddReference('ProtoGeometry')" + Environment.NewLine +
-                        "from Autodesk.DesignScript.Geometry import *" + Environment.NewLine + Environment.NewLine +
-                        "# " + Properties.Resources.PythonScriptEditorInputComment + Environment.NewLine +
-                        "dataEnteringNode = IN" + Environment.NewLine + Environment.NewLine +
-                        "# " + Properties.Resources.PythonScriptEditorCodeComment + Environment.NewLine + Environment.NewLine +
-                        "# " + Properties.Resources.PythonScriptEditorOutputComment + Environment.NewLine +
-                        "OUT = 0";
+                return
+@"static object Main(double a) {
+    return a*a;
+}";
             }
         }
 
@@ -386,6 +384,69 @@ namespace PythonNodeModels
                     OnNodeModified();
                 }
             }
+        }
+
+        private static List<string> FindMainParameters(SyntaxNode root)
+        {
+            var main = root.DescendantNodes()
+                .OfType<MethodDeclarationSyntax>()
+                .Where(m =>
+                    m.Identifier.Text == "Main" &&
+                    m.Modifiers.Any(SyntaxKind.StaticKeyword)).FirstOrDefault();
+            if (main == null) return null;
+            return main.ParameterList.Parameters
+                .Select(p => p.Identifier.Text)
+                .ToList();
+        }
+        public static List<string> GetMainParameterNames(string code)
+        {
+            try
+            {
+                // try parsing as a script (.csx)
+                var scriptTree = CSharpSyntaxTree.ParseText(
+                    code,
+                    new CSharpParseOptions(kind: SourceCodeKind.Script)
+                );
+                var scriptRoot = scriptTree.GetRoot();
+
+                var parameterNames = FindMainParameters(scriptRoot);
+                if(parameterNames?.Any(string.IsNullOrEmpty) == true)
+                {
+                    return null;
+                }
+                return parameterNames;
+            }
+            catch(Exception ex)
+            {
+                return null;
+            }
+        }
+        List<string> parameters = ["a", "b"];
+        protected override string GetInputName(int index)
+        {
+            return parameters !=null && parameters.Count > index ? parameters[index] : string.Format("IN[{0}]", index);
+        }
+
+        internal bool OnParametersModified(string script)
+        {
+            parameters = GetMainParameterNames(script);
+            if(parameters == null)
+            {
+                return false;
+            }
+            while (InPorts.Count > 0)
+            {
+                var port = InPorts[InPorts.Count - 1];
+                port.DestroyConnectors();
+                InPorts.Remove(port);
+            }
+            while (InPorts.Count < parameters.Count)
+            {
+                var idx = InPorts.Count;
+                InPorts.Add(new PortModel(PortType.Input, this, new PortData(GetInputName(idx), GetInputTooltip(idx))));
+            }
+            ClearErrorsAndWarnings();
+            return true;
         }
 
         #endregion

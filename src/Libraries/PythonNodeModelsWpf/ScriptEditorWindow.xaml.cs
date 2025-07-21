@@ -448,6 +448,11 @@ namespace PythonNodeModelsWpf
 
         private void UpdateScript(string scriptText)
         {
+            NodeModel.ClearErrorsAndWarnings();
+            if (!NodeModel.OnParametersModified(scriptText))
+            {
+                return;
+            }
             var command = new DynamoModel.UpdateModelValueCommand(
                 boundWorkspaceId, boundNodeId, propertyName, scriptText);
 
