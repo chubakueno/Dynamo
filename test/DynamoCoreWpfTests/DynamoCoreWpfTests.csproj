@@ -26,11 +26,11 @@
 	  <PackageReference Include="AvalonEdit" Version="6.3.0.90" />
 
       <!--roslyn compiler apis direct references so we can copy them to the test_dependencies folder-->
-      <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="3.11.0" GeneratePathProperty="true">
+      <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.13.0" GeneratePathProperty="true">
         <PrivateAssets>all</PrivateAssets>
         <IncludeAssets>compile; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       </PackageReference>
-      <PackageReference Include="Microsoft.CodeAnalysis.Common" Version="3.11.0" GeneratePathProperty="true">
+      <PackageReference Include="Microsoft.CodeAnalysis.Common" Version="4.13.0" GeneratePathProperty="true">
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>compile; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       </PackageReference>
