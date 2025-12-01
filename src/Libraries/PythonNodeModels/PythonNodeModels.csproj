@@ -49,6 +49,7 @@
     <EmbeddedResource Include="Docs\zh-TW\PythonMigrationWarning.html" />
   </ItemGroup>
   <ItemGroup>
+	<PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.13.0" />
 	<PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
   </ItemGroup>
   <ItemGroup>

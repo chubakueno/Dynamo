@@ -49,7 +49,7 @@ namespace PythonNodeModelsWpf
         }
     }
 
-    public class PythonNodeViewCustomization : VariableInputNodeViewCustomization, INodeViewCustomization<PythonNode>
+    public class PythonNodeViewCustomization : INodeViewCustomization<PythonNode>
     {       
         private DynamoViewModel dynamoViewModel;
         private PythonNode pythonNodeModel;
@@ -70,10 +70,14 @@ namespace PythonNodeModelsWpf
                 ScriptContent = scriptContent;
             }
         }
+
+        public void Dispose()
+        {
+
+        }
+
         public void CustomizeView(PythonNode nodeModel, NodeView nodeView)
         {
-            base.CustomizeView(nodeModel, nodeView);
-
             pythonNodeModel = nodeModel;
             pythonNodeView = nodeView;
             dynamoViewModel = nodeView.ViewModel.DynamoViewModel;

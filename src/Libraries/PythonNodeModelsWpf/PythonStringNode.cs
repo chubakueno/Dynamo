@@ -13,7 +13,7 @@ using PythonNodeModelsWpf.Controls;
 
 namespace PythonNodeModelsWpf
 {
-    class PythonStringNodeViewCustomization : VariableInputNodeViewCustomization, INodeViewCustomization<PythonStringNode>
+    class PythonStringNodeViewCustomization : INodeViewCustomization<PythonStringNode>
     {
         private DynamoViewModel dynamoViewModel;
         private PythonStringNode pythonStringNodeModel;
@@ -21,10 +21,12 @@ namespace PythonNodeModelsWpf
         private MenuItem pythonEngineVersionMenu;
         private readonly MenuItem learnMoreItem = new MenuItem { Header = PythonNodeModels.Properties.Resources.PythonNodeContextMenuLearnMoreButton };
 
+        public void Dispose()
+        {
+
+        }
         public void CustomizeView(PythonStringNode nodeModel, NodeView nodeView)
         {
-            base.CustomizeView(nodeModel, nodeView);
-
             pythonStringNodeModel = nodeModel;
             pythonStringNodeView = nodeView;
             dynamoViewModel = nodeView.ViewModel.DynamoViewModel;

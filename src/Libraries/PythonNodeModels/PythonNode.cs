@@ -11,8 +11,13 @@ using Autodesk.DesignScript.Runtime;
 using Dynamo.Configuration;
 using Dynamo.Graph;
 using Dynamo.Graph.Nodes;
+using Dynamo.Graph.Nodes.ZeroTouch;
 using Dynamo.Models;
 using Dynamo.PythonServices;
+using Dynamo.Utilities;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using ProtoCore.AST.AssociativeAST;
@@ -33,7 +38,7 @@ namespace PythonNodeModels
         }
     }
 
-    public abstract class PythonNodeBase : VariableInputNode
+    public abstract class PythonNodeBase : NodeModel
     {
         private string engine = string.Empty;
 
@@ -75,7 +80,6 @@ namespace PythonNodeModels
             {
                 NameOfAssemblyReferencedByNode = pyEng.GetType().Assembly.GetName();
             }
-
             return NameOfAssemblyReferencedByNode;
         }
 
@@ -103,7 +107,8 @@ namespace PythonNodeModels
 
         protected PythonNodeBase()
         {
-            OutPorts.Add(new PortModel(PortType.Output, this, new PortData("OUT", Properties.Resources.PythonNodePortDataOutputToolTip)));
+            InPorts.Add(new PortModel(PortType.Input, this, new PortData("a", "a")));
+            OutPorts.Add(new PortModel(PortType.Output, this, new PortData("result", Properties.Resources.PythonNodePortDataOutputToolTip)));
             ArgumentLacing = LacingStrategy.Disabled;
         }
 
@@ -117,17 +122,7 @@ namespace PythonNodeModels
             ArgumentLacing = LacingStrategy.Disabled;
         }
 
-        protected override string GetInputName(int index)
-        {
-            return string.Format("IN[{0}]", index);
-        }
-
-        protected override string GetInputTooltip(int index)
-        {
-            return "Input #" + index;
-        }
-
-        protected AssociativeNode CreateOutputAST(
+        protected List<AssociativeNode> CreateOutputAST(
             AssociativeNode codeInputNode, List<AssociativeNode> inputAstNodes,
             List<Tuple<string, AssociativeNode>> additionalBindings)
         {
@@ -139,18 +134,43 @@ namespace PythonNodeModels
             var vals = additionalBindings.Select(x => x.Item2).ToList();
             vals.Add(AstFactory.BuildExprList(inputAstNodes));
 
-            return AstFactory.BuildAssignment(
-                GetAstIdentifierForOutputIndex(0),
-                AstFactory.BuildFunctionCall(
+            var functionCallIdentifier = AstFactory.BuildIdentifier(GUID + "_packed");
+            var functionCall = AstFactory.BuildFunctionCall(
                     "PythonEvaluator",
                     "Evaluate",
                     new List<AssociativeNode>
                     {
+                        AstFactory.BuildStringNode(GUID.ToString()),
                         AstFactory.BuildStringNode(EngineName),
                         codeInputNode,
                         AstFactory.BuildExprList(names),
                         AstFactory.BuildExprList(vals)
-                    }));
+                    });
+            var astnode = AstFactory.BuildAssignment(
+                functionCallIdentifier, functionCall
+                );
+            if (OutPorts.Count == 1) {
+                return new List<AssociativeNode>{
+                    AstFactory.BuildAssignment(GetAstIdentifierForOutputIndex(0), astnode)
+                };
+            }
+            else
+            {
+                var result = new List<AssociativeNode>();
+                for (int i = 0; i < OutPorts.Count; i++)
+                {
+                    var extractorCall = AstFactory.BuildFunctionCall(
+                            "PythonEvaluator",
+                            "GetTupleField",
+                            new List<AssociativeNode>
+                            {
+                        functionCall,
+                        AstFactory.BuildIntNode(i+1L),
+                    });
+                    result.Add(AstFactory.BuildAssignment(GetAstIdentifierForOutputIndex(i), extractorCall));
+                }
+                return result;
+            }
         }
 
         internal event EventHandler MigrationAssistantRequested;
@@ -175,7 +195,7 @@ namespace PythonNodeModels
 
     }
 
-    [NodeName("Python Script")]
+    [NodeName("C# Script")]
     [NodeCategory(BuiltinNodeCategories.CORE_SCRIPTING)]
     [NodeDescription("PythonScriptDescription", typeof(Properties.Resources))]
     [NodeSearchTags("PythonSearchTags", typeof(Properties.Resources))]
@@ -222,16 +242,10 @@ namespace PythonNodeModels
         {
             get
             {
-                return "# " + Properties.Resources.PythonScriptEditorImports + Environment.NewLine +
-                        "import sys" + Environment.NewLine +
-                        "import clr" + Environment.NewLine +
-                        "clr.AddReference('ProtoGeometry')" + Environment.NewLine +
-                        "from Autodesk.DesignScript.Geometry import *" + Environment.NewLine + Environment.NewLine +
-                        "# " + Properties.Resources.PythonScriptEditorInputComment + Environment.NewLine +
-                        "dataEnteringNode = IN" + Environment.NewLine + Environment.NewLine +
-                        "# " + Properties.Resources.PythonScriptEditorCodeComment + Environment.NewLine + Environment.NewLine +
-                        "# " + Properties.Resources.PythonScriptEditorOutputComment + Environment.NewLine +
-                        "OUT = 0";
+                return
+@"static object Main(double a) {
+    return a*a;
+}";
             }
         }
 
@@ -250,8 +264,6 @@ namespace PythonNodeModels
                 script = File.ReadAllText(pythonTemplatePath);
             else
                 script = defaultPythonTemplateCode;
-
-            AddInput();
         }
 
         private string script;
@@ -273,16 +285,13 @@ namespace PythonNodeModels
         public override IEnumerable<AssociativeNode> BuildOutputAst(
             List<AssociativeNode> inputAstNodes)
         {
-            return new[]
-            {
-                CreateOutputAST(
+            return CreateOutputAST(
                     AstFactory.BuildStringNode(script),
                     inputAstNodes,
                     new List<Tuple<string, AssociativeNode>>()
                     {
                         Tuple.Create<string, AssociativeNode>(nameof(Name), AstFactory.BuildStringNode(Name))
-                    })
-            };
+                    });
         }
 
         protected override bool UpdateValueCore(UpdateValueParams updateValueParams)
@@ -406,6 +415,116 @@ namespace PythonNodeModels
             }
         }
 
+        private record MainSignature(List<string> Inputs, List<string> Outputs);
+
+        private static MainSignature FindMainSignature(SyntaxNode root)
+        {
+            var main = root.DescendantNodes()
+                .OfType<MethodDeclarationSyntax>()
+                .Where(m =>
+                    m.Identifier.Text == "Main" &&
+                    m.Modifiers.Any(SyntaxKind.StaticKeyword)).FirstOrDefault();
+            if (main == null) return null;
+
+            var inputs = new List<string>();
+            var outputs = new List<string>();
+
+            // --- INPUT PARAMETERS ---
+            foreach (var p in main.ParameterList.Parameters)
+                inputs.Add(p.Identifier.Text);
+
+            // --- OUTPUT TUPLE ---
+            if (main.ReturnType is TupleTypeSyntax tupleType)
+            {
+                foreach (var element in tupleType.Elements)
+                {
+                    var name = element.Identifier.Text;
+                    if (string.IsNullOrWhiteSpace(name))
+                        name = "__unnamed_tuple_element__";
+
+                    outputs.Add(name);
+                }
+            }
+            else
+            {
+                // Not a tuple → provide a default output name
+                outputs.Add("result");
+            }
+
+            return new MainSignature(inputs, outputs);
+        }
+        private static MainSignature FindMainSignature(string code)
+        {
+            try
+            {
+                // try parsing as a script (.csx)
+                var scriptTree = CSharpSyntaxTree.ParseText(
+                    code,
+                    new CSharpParseOptions(kind: SourceCodeKind.Script)
+                );
+                var scriptRoot = scriptTree.GetRoot();
+
+                var signature = FindMainSignature(scriptRoot);
+                if(signature?.Inputs.Any(string.IsNullOrEmpty) == true || signature?.Outputs.Any(string.IsNullOrEmpty) == true)
+                {
+                    return null;
+                }
+                return signature;
+            }
+            catch(Exception ex)
+            {
+                return null;
+            }
+        }
+        MainSignature signature;
+
+        void Synchronize(ObservableCollection<PortModel> ports, List<string> targetList, PortType portType)
+        {
+
+            bool update = false;
+            if (ports.Count == targetList.Count)
+            {
+                for (int i = 0; i < ports.Count; ++i)
+                {
+                    if (ports[i].Name != targetList[i])
+                    {
+                        update = true;
+                    }
+                }
+            }
+            else
+            {
+                update = true;
+            }
+            if (update)
+            {
+                while (ports.Count > 0)
+                {
+                    var port = ports[ports.Count - 1];
+                    port.DestroyConnectors();
+                    ports.Remove(port);
+                }
+                while (ports.Count < targetList.Count)
+                {
+                    var idx = ports.Count;
+                    ports.Add(new PortModel(portType, this, new PortData(targetList[idx], targetList[idx])));
+                }
+            }
+        }
+
+        internal bool OnParametersModified(string script)
+        {
+            signature = FindMainSignature(script);
+            if(signature == null)
+            {
+                return false;
+            }
+            Synchronize(InPorts, signature.Inputs, PortType.Input);
+            Synchronize(OutPorts, signature.Outputs, PortType.Output);
+            ClearErrorsAndWarnings();
+            return true;
+        }
+
         #endregion
     }
 
@@ -429,34 +548,19 @@ namespace PythonNodeModels
         public PythonStringNode()
         {
             InPorts.Add(new PortModel(PortType.Input, this, new PortData("script", Properties.Resources.PythonStringPortDataScriptToolTip)));
-            AddInput();
             RegisterAllPorts();
-        }
-
-        protected override void RemoveInput()
-        {
-            if (InPorts.Count > 1)
-                base.RemoveInput();
-        }
-
-        protected override int GetInputIndex()
-        {
-            return base.GetInputIndex() - 1;
         }
 
         public override IEnumerable<AssociativeNode> BuildOutputAst(
             List<AssociativeNode> inputAstNodes)
         {
-            return new[]
-            {
-                CreateOutputAST(
+            return CreateOutputAST(
                     inputAstNodes[0],
                     inputAstNodes.Skip(1).ToList(),
                     new List<Tuple<string, AssociativeNode>>()
                     {
                         Tuple.Create<string, AssociativeNode>(nameof(Name), AstFactory.BuildStringNode(Name))
-                    })
-            };
+                    });
         }
     }
 }
